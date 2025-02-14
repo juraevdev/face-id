@@ -25,4 +25,5 @@ def verify_face(image_file, user_encoding):
     new_face_encoding = encode_face(image_file)
     if new_face_encoding is None:
         return False
-    return face_recognition.compare_faces([user_encoding], new_face_encoding)[0]
+    return face_recognition.compare_faces([np.array(user_encoding)], new_face_encoding)[0]
+

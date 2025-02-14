@@ -44,16 +44,18 @@ class UserUpdateAPIView(generics.GenericAPIView):
 
     def put(self, request, *args, **kwargs):
         user = self.get_object()
-
-        # Yuzni yangilash
         face_image = request.FILES.get('face_image')
+
         if face_image:
             if verify_face(face_image, user.face_encoding):
                 user.face_encoding = encode_face(face_image)
-                user.save()
+        
+        serializer = self.get_serializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        # Userni yangilash
-        return self.update(request, *args, **kwargs)
     
 class LoginAPIView(generics.GenericAPIView):
     serializer_class = UserSerializer
@@ -86,7 +88,7 @@ class LoginAPIView(generics.GenericAPIView):
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
         
 
-        
+
 class LogoutAPIView(generics.GenericAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
