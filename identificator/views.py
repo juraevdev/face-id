@@ -1,13 +1,12 @@
-from rest_framework import status
-from rest_framework import mixins
-from rest_framework import generics
+from rest_framework import generics, status, permissions
 from rest_framework.response import Response
 from .models import User
 from .serializers import UserSerializer
 from .utils import encode_face, verify_face
 from rest_framework.parsers import MultiPartParser
+from rest_framework_simplejwt.tokens import RefreshToken
 
-class UserCreateAPIView(generics.GenericAPIView):
+class UserRegisterAPIView(generics.GenericAPIView):
     serializer_class = UserSerializer
     parser_classes = [MultiPartParser]
 
@@ -55,3 +54,49 @@ class UserUpdateAPIView(generics.GenericAPIView):
 
         # Userni yangilash
         return self.update(request, *args, **kwargs)
+    
+class LoginAPIView(generics.GenericAPIView):
+    serializer_class = UserSerializer
+    parser_classes = [MultiPartParser]
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request, *args, **kwargs):
+        face_image = request.FILES.get('face_image')
+        if not face_image:
+            return Response({"error": "Face image is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            face_encoding = encode_face(face_image)
+            if face_encoding is None:
+                return Response({"error": "No face detected."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            user = User.objects.all()
+            for u in user:
+                if verify_face(face_image, u.face_encoding):
+                    refresh = RefreshToken.for_user(u)
+                    return Response({
+                        "message": "Login successful.",
+                        "access": str(refresh.access_token),
+                        "refresh": str(refresh),
+                    }, status=status.HTTP_200_OK)
+            
+            return Response({"error": "Face not recognized."}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+
+        
+class LogoutAPIView(generics.GenericAPIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        try:
+            refresh_token = request.data.get("refresh")
+            if refresh_token:
+                token = RefreshToken(refresh_token)
+                token.blacklist()
+                return Response({"message": "Logout successful."}, status=status.HTTP_200_OK)
+            return Response({"error": "Refresh token is required."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
