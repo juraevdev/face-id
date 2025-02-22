@@ -1,9 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, Request
 from sqlalchemy.orm import Session
-from typing import List
-import numpy as np
-from jose import JWTError, jwt
-
+from typing import List, Optional
 from database import get_db
 from models import User
 from schemas import UserSchema
@@ -34,34 +31,8 @@ async def register_user(
 
     return {"message": "User registered successfully", "user": UserSchema.from_orm(new_user)}
 
-@router.put("/update/{user_id}", status_code=status.HTTP_200_OK)
-async def update_user(
-    user_id: int,
-    face_image: UploadFile = File(None),
-    username: str = None,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=400, detail="User not found.")
-    
-    if face_image:
-        if verify_face(face_image.file, user.face_encoding):
-            user.face_encoding = encode_face(face_image.file).tolist()
-        else:
-            raise HTTPException(status_code=400, detail="Face verification failed.")
-        
-    if username:
-        user.username = username
-
-    db.commit()
-    db.refresh(user)
-
-    return {"message": "User updated successfully", "user": UserSchema.from_orm(user)}
 
 @router.post("/login", status_code=status.HTTP_200_OK)
-
 async def login(face_image: UploadFile = File(...), db: Session = Depends(get_db)):
     face_encoding = encode_face(face_image.file)
     if face_encoding is None:
@@ -81,6 +52,15 @@ async def login(face_image: UploadFile = File(...), db: Session = Depends(get_db
         
     raise HTTPException(status_code=401, detail="Face not recognized.")
 
-@router.post("/logout", status_code=status.HTTP_200_OK)
-async def logout(current_user: User = Depends(get_current_user)):
-    return {"message": "Logout successful"}
+
+@router.delete("/user/{user_id}", status_code=status.HTTP_200_OK)
+async def delete_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    db.delete(user)
+    db.commit()
+
+    return {"message": "User deleted successfully"}
